@@ -42,7 +42,8 @@ jobs:
       run: |
         echo "Project ID: ${{ env.PROJECT_ID }}"
         echo "Registry Host: ${{ env.REGISTRY_HOST }}"
-        gcloud config list --only project --format="value(core.project)"
+        # FIX: Replaced gcloud config list with gcloud config get-value to avoid unrecognized arguments error.
+        gcloud config get-value project
         gcloud artifacts repositories describe ${{ env.IMAGE_NAME }} --location=${{ env.CLOUD_RUN_REGION }} --project=${{ env.PROJECT_ID }}
         
     # 1. Configure Docker for Artifact Registry (AR)
