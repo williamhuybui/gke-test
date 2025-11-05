@@ -1,34 +1,36 @@
-# Required for the Google actions to work correctly
+name: Simple Cloud Run Deployment
+
+on:
+  push:
+  branches:
+    - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
 permissions:
   contents: 'read'
-  # We need to explicitly allow writing secrets for the auth action to work securely
   id-token: 'write' 
 
 steps:
   - name: Checkout Repository
     uses: actions/checkout@v4
 
-  # 1. Authenticate to Google Cloud
-  # This step uses your GCP_SA_KEY secret to establish a secure session.
-  - name: Authenticate Google Cloud Service Account
+  - name: Authenticate to Google Cloud
     uses: google-github-actions/auth@v2
     with:
-      # This variable must match the name of your GitHub Secret containing the SA key JSON
       credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-  # 2. Set up the gcloud CLI
-  - name: Set up Cloud SDK (gcloud)
+  - name: Set up Cloud SDK
     uses: google-github-actions/setup-gcloud@v2
     with:
-      project_id: to-do-app-test # Your specified project ID
+      project_id: to-do-app-test
 
-  # 3. Deploy the pre-built image to Cloud Run
   - name: Deploy to Cloud Run
     uses: google-github-actions/deploy-cloudrun@v2
     with:
-      # --- UPDATED VALUES ---
-      service: todoimg   # The name of the Cloud Run service
-      region: us-south1  # The GCP region for the Cloud Run service and the image path
-      # The full image path: [REGION]-docker.pkg.dev/[PROJECT_ID]/[REPOSITORY]/[IMAGE_NAME]
-      # New path uses us-south1 and the 'todolist' repository.
+      service: todoimg
+      region: us-south1
       image: us-south1-docker.pkg.dev/to-do-app-test/todolist/todoimg
+      gcloud_flags: --allow-unauthenticated
