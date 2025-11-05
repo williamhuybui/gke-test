@@ -1,0 +1,48 @@
+name: Deploy to GKE
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: to-do-list-app-test
+  GKE_CLUSTER: CLUSTER_NAME
+  GKE_ZONE: us-central1-a
+  IMAGE: todoimg
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+
+    - name: Configure Docker for GCR
+      run: gcloud auth configure-docker
+
+    - name: Build Docker image
+      run: docker build -t gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA -t gcr.io/$PROJECT_ID/$IMAGE:latest .
+
+    - name: Push Docker image
+      run: |
+        docker push gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA
+        docker push gcr.io/$PROJECT_ID/$IMAGE:latest
+
+    - name: Get GKE credentials
+      run: gcloud container clusters get-credentials $GKE_CLUSTER --zone $GKE_ZONE
+
+    - name: Deploy to GKE
+      run: |
+        kubectl apply -f k8s.yaml
+        kubectl set image deployment/todoapp todoapp=gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA
+        kubectl rollout status deployment/todoapp
