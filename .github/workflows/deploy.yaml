@@ -36,10 +36,16 @@ jobs:
       uses: google-github-actions/setup-gcloud@v1
       with:
         project_id: ${{ env.PROJECT_ID }}
-
+        
+    # DEBUG STEP: Verify environment variables and gcloud setup
+    - name: Verify Configuration
+      run: |
+        echo "Project ID: ${{ env.PROJECT_ID }}"
+        echo "Registry Host: ${{ env.REGISTRY_HOST }}"
+        gcloud config list --only project --format="value(core.project)"
+        gcloud artifacts repositories describe ${{ env.IMAGE_NAME }} --location=${{ env.CLOUD_RUN_REGION }} --project=${{ env.PROJECT_ID }}
+        
     # 1. Configure Docker for Artifact Registry (AR)
-    # Note: We are using Artifact Registry (pkg.dev) which is the current standard,
-    # replacing the older Container Registry (gcr.io).
     - name: Configure Docker for Artifact Registry
       run: gcloud auth configure-docker ${{ env.REGISTRY_HOST }}
 
@@ -49,6 +55,8 @@ jobs:
         # Use the Artifact Registry path for tagging
         IMAGE_URI=${{ env.REGISTRY_HOST }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}
         
+        # Log the URI we are about to build/tag
+        echo "Building image with URI: $IMAGE_URI:$GITHUB_SHA"
         docker build -t $IMAGE_URI:$GITHUB_SHA -t $IMAGE_URI:latest .
 
     # 3. Push Docker Image to Artifact Registry
@@ -59,9 +67,7 @@ jobs:
         docker push $IMAGE_URI:$GITHUB_SHA
         docker push $IMAGE_URI:latest
 
-    # 4. Deploy to Cloud Run (This replaces the entire GKE section)
-    # The --image flag uses the image we just pushed.
-    # The --allow-unauthenticated flag makes the service public (like a web app).
+    # 4. Deploy to Cloud Run
     - name: Deploy to Cloud Run
       uses: google-github-actions/deploy-cloudrun@v2
       with:
