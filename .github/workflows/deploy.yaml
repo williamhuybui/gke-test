@@ -25,7 +25,8 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: to-do-app-test # Corrected to match your image path
+          # CORRECTED: Ensures the project context is 'to-do-app-test'
+          project_id: to-do-app-test
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
@@ -33,4 +34,5 @@ jobs:
           service: todoimg
           region: us-south1
           image: us-south1-docker.pkg.dev/to-do-app-test/todolist/todoimg
-          flags: --allow-unauthenticated # Corrected input name
+          # CORRECTED: Changed 'gcloud_flags' to 'flags'
+          flags: --allow-unauthenticated
