@@ -1,4 +1,4 @@
-name: Deploy to GKE
+name: Deploy to Cloud Run
 
 on:
   push:
@@ -7,13 +7,21 @@ on:
 
 env:
   PROJECT_ID: to-do-list-app-test
-  GKE_CLUSTER: CLUSTER_NAME
-  GKE_ZONE: us-central1-a
-  IMAGE: todoimg
+  # The region for the Cloud Run service deployment
+  CLOUD_RUN_REGION: us-south1
+  SERVICE_NAME: todo-list-service
+  IMAGE_NAME: todoimg
+  # Artifact Registry host must match the deployment region
+  REGISTRY_HOST: us-south1-docker.pkg.dev
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    
+    # Ensures the service name is valid for Cloud Run
+    defaults:
+      run:
+        shell: bash
 
     steps:
     - name: Checkout code
@@ -26,23 +34,38 @@ jobs:
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ env.PROJECT_ID }}
 
-    - name: Configure Docker for GCR
-      run: gcloud auth configure-docker
+    # 1. Configure Docker for Artifact Registry (AR)
+    # Note: We are using Artifact Registry (pkg.dev) which is the current standard,
+    # replacing the older Container Registry (gcr.io).
+    - name: Configure Docker for Artifact Registry
+      run: gcloud auth configure-docker ${{ env.REGISTRY_HOST }}
 
-    - name: Build Docker image
-      run: docker build -t gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA -t gcr.io/$PROJECT_ID/$IMAGE:latest .
+    # 2. Build and Tag Docker Image
+    - name: Build and Tag Docker image
+      run: |
+        # Use the Artifact Registry path for tagging
+        IMAGE_URI=${{ env.REGISTRY_HOST }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}
+        
+        docker build -t $IMAGE_URI:$GITHUB_SHA -t $IMAGE_URI:latest .
 
+    # 3. Push Docker Image to Artifact Registry
     - name: Push Docker image
       run: |
-        docker push gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA
-        docker push gcr.io/$PROJECT_ID/$IMAGE:latest
+        IMAGE_URI=${{ env.REGISTRY_HOST }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}
+        
+        docker push $IMAGE_URI:$GITHUB_SHA
+        docker push $IMAGE_URI:latest
 
-    - name: Get GKE credentials
-      run: gcloud container clusters get-credentials $GKE_CLUSTER --zone $GKE_ZONE
-
-    - name: Deploy to GKE
-      run: |
-        kubectl apply -f k8s.yaml
-        kubectl set image deployment/todoapp todoapp=gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA
-        kubectl rollout status deployment/todoapp
+    # 4. Deploy to Cloud Run (This replaces the entire GKE section)
+    # The --image flag uses the image we just pushed.
+    # The --allow-unauthenticated flag makes the service public (like a web app).
+    - name: Deploy to Cloud Run
+      uses: google-github-actions/deploy-cloudrun@v2
+      with:
+        service: ${{ env.SERVICE_NAME }}
+        region: ${{ env.CLOUD_RUN_REGION }}
+        image: ${{ env.REGISTRY_HOST }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        flags: --allow-unauthenticated
