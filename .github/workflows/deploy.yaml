@@ -1,4 +1,4 @@
-name: Simple Cloud Run Deployment
+name: Simple Cloud Run Deployment (Gcloud Direct)
 
 on:
   push:
@@ -25,14 +25,17 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
-          # CORRECTED: Ensures the project context is 'to-do-app-test'
+          # This sets the default configuration context
           project_id: to-do-app-test
 
-      - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: todoimg
-          region: us-south1
-          image: us-south1-docker.pkg.dev/to-do-app-test/todolist/todoimg
-          # CORRECTED: Changed 'gcloud_flags' to 'flags'
-          flags: --allow-unauthenticated
+      - name: Deploy to Cloud Run using gcloud CLI
+        run: |
+          IMAGE_PATH=us-south1-docker.pkg.dev/to-do-app-test/todolist/todoimg
+          
+          # Deploy using the direct gcloud CLI command
+          # We explicitly specify --project and --region here for redundancy
+          gcloud run deploy todoimg \
+            --image "$IMAGE_PATH" \
+            --region us-south1 \
+            --project to-do-app-test \
+            --allow-unauthenticated
