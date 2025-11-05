@@ -1,78 +1,34 @@
-name: Deploy to Cloud Run
+# Required for the Google actions to work correctly
+permissions:
+  contents: 'read'
+  # We need to explicitly allow writing secrets for the auth action to work securely
+  id-token: 'write' 
 
-on:
-  push:
-    branches:
-      - main
+steps:
+  - name: Checkout Repository
+    uses: actions/checkout@v4
 
-env:
-  PROJECT_ID: to-do-list-app-test
-  # The region for the Cloud Run service deployment
-  CLOUD_RUN_REGION: us-south1
-  SERVICE_NAME: todo-list-service
-  IMAGE_NAME: todoimg
-  # Artifact Registry host must match the deployment region
-  REGISTRY_HOST: us-south1-docker.pkg.dev
+  # 1. Authenticate to Google Cloud
+  # This step uses your GCP_SA_KEY secret to establish a secure session.
+  - name: Authenticate Google Cloud Service Account
+    uses: google-github-actions/auth@v2
+    with:
+      # This variable must match the name of your GitHub Secret containing the SA key JSON
+      credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    
-    # Ensures the service name is valid for Cloud Run
-    defaults:
-      run:
-        shell: bash
+  # 2. Set up the gcloud CLI
+  - name: Set up Cloud SDK (gcloud)
+    uses: google-github-actions/setup-gcloud@v2
+    with:
+      project_id: to-do-app-test # Your specified project ID
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-
-    - name: Authenticate to Google Cloud hehe
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: '${{ secrets.GCP_SA_KEY }}'
-
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1
-      with:
-        project_id: ${{ env.PROJECT_ID }}
-        
-    # DEBUG STEP: Verify environment variables and gcloud setup
-    - name: Verify Configuration
-      run: |
-        echo "Project ID: ${{ env.PROJECT_ID }}"
-        echo "Registry Host: ${{ env.REGISTRY_HOST }}"
-        # FIX: Replaced gcloud config list with gcloud config get-value to avoid unrecognized arguments error.
-        gcloud config get-value project
-        gcloud artifacts repositories describe ${{ env.IMAGE_NAME }} --location=${{ env.CLOUD_RUN_REGION }} --project=${{ env.PROJECT_ID }}
-        
-    # 1. Configure Docker for Artifact Registry (AR)
-    - name: Configure Docker for Artifact Registry
-      run: gcloud auth configure-docker ${{ env.REGISTRY_HOST }}
-
-    # 2. Build and Tag Docker Image
-    - name: Build and Tag Docker image
-      run: |
-        # Use the Artifact Registry path for tagging
-        IMAGE_URI=${{ env.REGISTRY_HOST }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}
-        
-        # Log the URI we are about to build/tag
-        echo "Building image with URI: $IMAGE_URI:$GITHUB_SHA"
-        docker build -t $IMAGE_URI:$GITHUB_SHA -t $IMAGE_URI:latest .
-
-    # 3. Push Docker Image to Artifact Registry
-    - name: Push Docker image
-      run: |
-        IMAGE_URI=${{ env.REGISTRY_HOST }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}
-        
-        docker push $IMAGE_URI:$GITHUB_SHA
-        docker push $IMAGE_URI:latest
-
-    # 4. Deploy to Cloud Run
-    - name: Deploy to Cloud Run
-      uses: google-github-actions/deploy-cloudrun@v2
-      with:
-        service: ${{ env.SERVICE_NAME }}
-        region: ${{ env.CLOUD_RUN_REGION }}
-        image: ${{ env.REGISTRY_HOST }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-        flags: --allow-unauthenticated
+  # 3. Deploy the pre-built image to Cloud Run
+  - name: Deploy to Cloud Run
+    uses: google-github-actions/deploy-cloudrun@v2
+    with:
+      # --- UPDATED VALUES ---
+      service: todoimg   # The name of the Cloud Run service
+      region: us-south1  # The GCP region for the Cloud Run service and the image path
+      # The full image path: [REGION]-docker.pkg.dev/[PROJECT_ID]/[REPOSITORY]/[IMAGE_NAME]
+      # New path uses us-south1 and the 'todolist' repository.
+      image: us-south1-docker.pkg.dev/to-do-app-test/todolist/todoimg
